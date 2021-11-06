@@ -2,8 +2,9 @@ import nltk
 import pickle
 import re
 import numpy as np
+from gensim.models import KeyedVectors
 
-GIUSEPPE = "FROM GITHUB"
+SOURCE = "FROM GITHUB"
 
 nltk.download('stopwords')
 from nltk.corpus import stopwords
@@ -32,6 +33,7 @@ def text_prepare(text):
     return text.strip()
 
 
+
 def load_embeddings(embeddings_path):
     """Loads pre-trained word embeddings from tsv file.
     Args:
@@ -45,15 +47,9 @@ def load_embeddings(embeddings_path):
     # Note that here you also need to know the dimension of the loaded embeddings.
     # When you load the embeddings, use numpy.float32 type as dtype
 
-    ########################
-    #### YOUR CODE HERE ####
-    ########################
-
-    # remove this when you're done
-    raise NotImplementedError(
-        "Open utils.py and fill with your code. In case of Google Colab, download"
-        "(https://github.com/hse-aml/natural-language-processing/blob/master/project/utils.py), "
-        "edit locally and upload using '> arrow on the left edge' -> Files -> UPLOAD")
+    #STUDENT CODE
+    embeddings = KeyedVectors.load_word2vec_format(embeddings_path, binary=False, datatype=np.float32)
+    return embeddings, embeddings.vector_size
 
 
 def question_to_vec(question, embeddings, dim):
@@ -61,16 +57,16 @@ def question_to_vec(question, embeddings, dim):
 
     # Hint: you have already implemented exactly this function in the 3rd assignment.
 
-    ########################
-    #### YOUR CODE HERE ####
-    ########################
+    # STUDENT CODE
+    output = []
+    for word in question.split():
+      if word in embeddings:
+        output.append(embeddings[word])
 
-    # remove this when you're done
-    raise NotImplementedError(
-        "Open utils.py and fill with your code. In case of Google Colab, download"
-        "(https://github.com/hse-aml/natural-language-processing/blob/master/project/utils.py), "
-        "edit locally and upload using '> arrow on the left edge' -> Files -> UPLOAD")
+    if not len(output):
+      return np.zeros(dim)
 
+    return np.mean(output, axis=0)
 
 def unpickle_file(filename):
     """Returns the result of unpickling the file content."""
