@@ -88,6 +88,6 @@ class DialogueManager(object):
             
             # Pass prepared_question to thread_ranker to get predictions.
             # STUDENT CODE
-            thread_id = self.thread_ranker.get_best_thread(question, tag)
+            thread_id = self.thread_ranker.get_best_thread(prepared_question, tag)
             
             return self.ANSWER_TEMPLATE % (tag, thread_id)
