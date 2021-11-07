@@ -1,91 +1,93 @@
 import os
-import io
-import glob
-from pathlib import Path
-from chatterbot.exceptions import OptionalDependencyImportError
+from sklearn.metrics.pairwise import pairwise_distances_argmin
 
-try:
-    from chatterbot_corpus.corpus import DATA_DIRECTORY
-except (ImportError, ModuleNotFoundError):
-    # Default to the home directory of the current user
-    DATA_DIRECTORY = os.path.join(
-        Path.home(),
-        'chatterbot_corpus',
-        'data'
-    )
+from chatterbot import ChatBot
+from chatterbot.trainers import ChatterBotCorpusTrainer
+from utils import *
 
+SOURCE="GITHUB"
 
-CORPUS_EXTENSION = 'yml'
+class ThreadRanker(object):
+    def __init__(self, paths):
+        self.word_embeddings, self.embeddings_dim = load_embeddings(paths['WORD_EMBEDDINGS'])
+        self.thread_embeddings_folder = paths['THREAD_EMBEDDINGS_FOLDER']
 
+    def __load_embeddings_by_tag(self, tag_name):
+        embeddings_path = os.path.join(self.thread_embeddings_folder, tag_name + ".pkl")
+        thread_ids, thread_embeddings = unpickle_file(embeddings_path)
+        return thread_ids, thread_embeddings
 
-def get_file_path(dotted_path, extension='json'):
-    """
-    Reads a dotted file path and returns the file path.
-    """
-    # If the operating system's file path seperator character is in the string
-    if os.sep in dotted_path or '/' in dotted_path:
-        # Assume the path is a valid file path
-        return dotted_path
+    def get_best_thread(self, question, tag_name):
+        """ Returns id of the most similar thread for the question.
+            The search is performed across the threads with a given tag.
+        """
+        thread_ids, thread_embeddings = self.__load_embeddings_by_tag(tag_name)
 
-    parts = dotted_path.split('.')
-    if parts[0] == 'chatterbot':
-        parts.pop(0)
-        parts[0] = DATA_DIRECTORY
-
-    corpus_path = os.path.join(*parts)
-
-    path_with_extension = '{}.{}'.format(corpus_path, extension)
-    if os.path.exists(path_with_extension):
-        corpus_path = path_with_extension
-
-    return corpus_path
+        # HINT: you have already implemented a similar routine in the 3rd assignment.
+        
+        # STUDENT CODE
+        question_vec = question_to_vec(question, self.word_embeddings, self.embeddings_dim)
+        best_thread = pairwise_distances_argmin([question_vec], thread_embeddings)[0]
+        return thread_ids.iloc[best_thread]
 
 
-def read_corpus(file_name):
-    """
-    Read and return the data from a corpus json file.
-    """
-    try:
-        import yaml
-    except ImportError:
-        message = (
-            'Unable to import "yaml".\n'
-            'Please install "pyyaml" to enable chatterbot corpus functionality:\n'
-            'pip3 install pyyaml'
-        )
-        raise OptionalDependencyImportError(message)
 
-    with io.open(file_name, encoding='utf-8') as data_file:
-        return yaml.load(data_file)
+class DialogueManager(object):
+    def __init__(self, paths):
+        print("Loading resources...")
 
+        # Intent recognition:
+        self.intent_recognizer = unpickle_file(paths['INTENT_RECOGNIZER'])
+        self.tfidf_vectorizer = unpickle_file(paths['TFIDF_VECTORIZER'])
 
-def list_corpus_files(dotted_path):
-    """
-    Return a list of file paths to each data file in the specified corpus.
-    """
-    corpus_path = get_file_path(dotted_path, extension=CORPUS_EXTENSION)
-    paths = []
+        self.ANSWER_TEMPLATE = 'I think its about %s\nThis thread might help you: https://stackoverflow.com/questions/%s'
 
-    if os.path.isdir(corpus_path):
-        paths = glob.glob(corpus_path + '/**/*.' + CORPUS_EXTENSION, recursive=True)
-    else:
-        paths.append(corpus_path)
+        # Goal-oriented part:
+        self.tag_classifier = unpickle_file(paths['TAG_CLASSIFIER'])
+        self.thread_ranker = ThreadRanker(paths)
+        self.__init_chitchat_bot()
 
-    paths.sort()
-    return paths
+    def __init_chitchat_bot(self):
+        """Initializes self.chitchat_bot with some conversational model."""
 
+        # Hint: you might want to create and train chatterbot.ChatBot here.
+        # Create an instance of the ChatBot class.
+        # Set a trainer set_trainer(ChatterBotCorpusTrainer) for the ChatBot.
+        # Train the ChatBot with "chatterbot.corpus.english" param.
+        # Note that we use chatterbot==0.7.6 in this project. 
+        # You are welcome to experiment with other versions but they might have slightly different API.
+        
+        # STUDENT CODE
+        self.chitchat = ChatBot("AI Programmer")
+        trainer = ChatterBotCorpusTrainer(self.chitchat)
+        trainer.train("chatterbot.corpus.english")
+       
+    def generate_answer(self, question):
+        """Combines stackoverflow and chitchat parts using intent recognition."""
 
-def load_corpus(*data_file_paths):
-    """
-    Return the data contained within a specified corpus.
-    """
-    for file_path in data_file_paths:
-        corpus = []
-        corpus_data = read_corpus(file_path)
+        # Recognize intent of the question using `intent_recognizer`.
+        # Don't forget to prepare question and calculate features for the question.
+        
+        # STUDENT CODE
+        prepared_question = text_prepare(question)
+        features = self.tfidf_vectorizer.transform([prepared_question])
+        intent = self.intent_recognizer.predict(features[0])
 
-        conversations = corpus_data.get('conversations', [])
-        corpus.extend(conversations)
-
-        categories = corpus_data.get('categories', [])
-
-        yield corpus, categories, file_path
+        # Chit-chat part:   
+        if intent == 'dialogue':
+            # Pass question to chitchat_bot to generate a response.
+            # STUDENT CODE
+            response = self.chitchat.get_response(question)
+            return response
+        
+        # Goal-oriented part:
+        else:        
+            # Pass features to tag_classifier to get predictions.
+            # STUDENT CODE
+            tag = self.tag_classifier.predict(features)[0]
+            
+            # Pass prepared_question to thread_ranker to get predictions.
+            # STUDENT CODE
+            thread_id = self.thread_ranker.get_best_thread(question, tag)
+            
+            return self.ANSWER_TEMPLATE % (tag, thread_id)
