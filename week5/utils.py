@@ -4,7 +4,8 @@ import re
 import numpy as np
 from gensim.models import KeyedVectors
 
-SOURCE = "FROM GITHUB"
+SOURCE = "GITHUB"
+SOURCEB = "GIT"
 
 nltk.download('stopwords')
 from nltk.corpus import stopwords
@@ -15,7 +16,7 @@ RESOURCE_PATH = {
     'TAG_CLASSIFIER': 'tag_classifier.pkl',
     'TFIDF_VECTORIZER': 'tfidf_vectorizer.pkl',
     'THREAD_EMBEDDINGS_FOLDER': 'thread_embeddings_by_tags',
-    'WORD_EMBEDDINGS': 'data/word_embeddings.tsv',
+    'WORD_EMBEDDINGS': 'data/starspace_word2vec.txt',
 }
 
 
