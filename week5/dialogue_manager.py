@@ -27,7 +27,7 @@ class ThreadRanker(object):
         
         # STUDENT CODE
         question_vec = question_to_vec(question, self.word_embeddings, self.embeddings_dim)
-        best_thread = pairwise_distances_argmin([question_vec], thread_embeddings)[0]
+        best_thread = pairwise_distances_argmin([question_vec], thread_embeddings, metric="cosine")[0]
         return thread_ids.iloc[best_thread]
 
 
